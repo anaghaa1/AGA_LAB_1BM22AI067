@@ -1,0 +1,35 @@
+#Train an RBM on any dataset.
+#Extract meaningful features from input data.
+#Use extracted features for classification.
+# Import necessary libraries
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import fetch_openml
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.neural_network import BernoulliRBM, MLPClassifier
+from sklearn.metrics import classification_report
+
+mnist = fetch_openml('mnist_784', version=1)
+data = mnist['data'].values
+labels = mnist['target'].astype(int).values
+scaler = MinMaxScaler(feature_range=(0, 1))
+data_normalized = scaler.fit_transform(data)
+X_train, X_test, y_train, y_test = train_test_split(data_normalized, labels, test_size=0.2, random_state=42)
+rbm = BernoulliRBM(n_components=100, learning_rate=0.03, n_iter=20, random_state=42, verbose=True)
+rbm.fit(X_train)
+X_train_features = rbm.transform(X_train)
+X_test_features = rbm.transform(X_test)
+print("Sample RBM Features:", X_train_features[:5])
+mlp_classifier = MLPClassifier(hidden_layer_sizes=(200,), max_iter=500, solver='adam', random_state=42)
+mlp_classifier.fit(X_train_features, y_train)
+y_pred = mlp_classifier.predict(X_test_features)
+print(classification_report(y_test, y_pred))
+plt.figure(figsize=(10, 5))
+for i in range(10):
+    plt.subplot(2, 5, i+1)
+    plt.imshow(X_test[i].reshape(28, 28), cmap='gray')
+    plt.title(f"Pred: {y_pred[i]} Actual: {y_test[i]}")
+    plt.axis('off')
+
+plt.show()
