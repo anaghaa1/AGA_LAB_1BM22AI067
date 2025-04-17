@@ -1,0 +1,77 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import fetch_california_housing
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+import pandas as pd
+
+data = fetch_california_housing()
+X = data.data[:1000] 
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+class GRBM_Numpy:
+    def __init__(self, n_visible, n_hidden, learning_rate=0.01):
+        self.n_visible = n_visible
+        self.n_hidden = n_hidden
+        self.lr = learning_rate
+        self.W = np.random.normal(0, 0.01, (n_visible, n_hidden))
+        self.h_bias = np.zeros(n_hidden)
+        self.v_bias = np.zeros(n_visible)
+
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def sample_h(self, v):
+        h_prob = self.sigmoid(np.dot(v, self.W) + self.h_bias)
+        return h_prob, np.random.binomial(1, h_prob)
+
+    def sample_v(self, h):
+        v_mean = np.dot(h, self.W.T) + self.v_bias
+        return v_mean, v_mean + np.random.normal(0, 0.1, v_mean.shape)
+
+    def contrastive_divergence(self, v0, epochs=20):
+        for epoch in range(epochs):
+            h_prob0, h0 = self.sample_h(v0)
+            v1_mean, v1 = self.sample_v(h0)
+            h_prob1, _ = self.sample_h(v1)
+
+            self.W += self.lr * ((np.dot(v0.T, h_prob0) - np.dot(v1.T, h_prob1)) / v0.shape[0])
+            self.v_bias += self.lr * np.mean(v0 - v1, axis=0)
+            self.h_bias += self.lr * np.mean(h_prob0 - h_prob1, axis=0)
+
+            error = np.mean((v0 - v1) ** 2)
+            if epoch % 5 == 0:
+                print(f"Epoch {epoch} Reconstruction Error: {error:.4f}")
+
+rbm1 = GRBM_Numpy(n_visible=X_scaled.shape[1], n_hidden=64, learning_rate=0.05)
+rbm1.contrastive_divergence(X_scaled, epochs=30)
+H1_prob, _ = rbm1.sample_h(X_scaled)
+
+rbm2 = GRBM_Numpy(n_visible=64, n_hidden=32, learning_rate=0.05)
+rbm2.contrastive_divergence(H1_prob, epochs=30)
+H2_prob, _ = rbm2.sample_h(H1_prob)
+
+features = H2_prob
+
+kmeans = KMeans(n_clusters=3, random_state=0)
+labels = kmeans.fit_predict(features)
+sil_score = silhouette_score(features, labels)
+
+pca = PCA(n_components=2)
+vis = pca.fit_transform(features)
+
+plt.figure(figsize=(8, 5))
+plt.scatter(vis[:, 0], vis[:, 1], c=labels, cmap='viridis', edgecolor='k')
+plt.title(f'DBM (2-layer GRBM) Features - Silhouette Score: {sil_score:.2f}')
+plt.xlabel('PCA 1')
+plt.ylabel('PCA 2')
+plt.colorbar(label='Cluster')
+plt.tight_layout()
+plt.show()
+
+df = pd.DataFrame(features, columns=[f'Feature_{i+1}' for i in range(features.shape[1])])
+print(df.head()) 
+
