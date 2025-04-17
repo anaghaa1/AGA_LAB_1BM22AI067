@@ -1,0 +1,50 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_wine
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from sklearn.neural_network import BernoulliRBM, MLPClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, ConfusionMatrixDisplay
+
+# Load and prepare the Wine dataset
+data = load_wine()
+X = data.data
+y = data.target
+X = StandardScaler().fit_transform(X)
+
+# Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Layer-wise pretraining using RBMs
+rbm1 = BernoulliRBM(n_components=64, learning_rate=0.05, n_iter=10, verbose=True, random_state=0)
+rbm1.fit(X_train)
+H1_train = rbm1.transform(X_train)
+
+rbm2 = BernoulliRBM(n_components=32, learning_rate=0.05, n_iter=10, verbose=True, random_state=0)
+rbm2.fit(H1_train)
+H2_train = rbm2.transform(H1_train)
+
+# Transform test data through RBMs
+H1_test = rbm1.transform(X_test)
+H2_test = rbm2.transform(H1_test)
+
+# Fine-tuning with logistic regression
+clf_rbm = LogisticRegression(max_iter=1000)
+clf_rbm.fit(H2_train, y_train)
+y_pred_rbm = clf_rbm.predict(H2_test)
+acc_rbm = accuracy_score(y_test, y_pred_rbm)
+
+# Traditional MLP
+mlp = MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=1000, random_state=0)
+mlp.fit(X_train, y_train)
+y_pred_mlp = mlp.predict(X_test)
+acc_mlp = accuracy_score(y_test, y_pred_mlp)
+
+# Print accuracy comparison
+print(f"Accuracy (Stacked RBMs + Logistic Regression): {acc_rbm:.4f}")
+print(f"Accuracy (Traditional MLP): {acc_mlp:.4f}")
+
+# Visualization using PCA
+
